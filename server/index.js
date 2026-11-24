@@ -99,9 +99,10 @@ app.get("/api/admin/assets",auth,async(req,res,next)=>{try{
 app.delete("/api/admin/assets",auth,async(req,res,next)=>{try{
  const {publicId,resourceType}=req.body||{};
  if(typeof publicId!=="string"||!publicId.startsWith("soham-portfolio/")||!["image","raw"].includes(resourceType))return res.status(400).json({message:"Invalid asset selection."});
- const docs=await Content.find({section:{$in:sections}}).lean();
- if(docs.some(doc=>JSON.stringify(doc.data).includes(publicId)))return res.status(409).json({message:"This file is referenced by portfolio content. Replace or remove that URL before deleting it."});
  configureCloudinary();
+ const uploaded=await cloudinary.api.resource(publicId,{resource_type:resourceType});
+ const docs=await Content.find({section:{$in:sections}}).lean();
+ if(docs.some(doc=>{const content=JSON.stringify(doc.data);return content.includes(publicId)||content.includes(uploaded.secure_url);}))return res.status(409).json({message:"This file is currently used in your portfolio. Apply a different image or remove its URL before deleting it."});
  const result=await cloudinary.uploader.destroy(publicId,{resource_type:resourceType,invalidate:true});
  if(result.result!=="ok"&&result.result!=="not found")return res.status(502).json({message:"Cloudinary could not delete this file."});
  res.json({message:"File deleted."});
