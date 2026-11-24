@@ -126,7 +126,7 @@ function Admin(){
  async function upload(e){
   const file=e.target.files?.[0];if(!file)return;
   const fd=new FormData();fd.append("file",file);setBusy(true);setStatus("");
-  try{const b=await api("/api/admin/upload",{method:"POST",body:fd});setAsset(b.url);setStatus("Upload complete. Copy the URL into your content JSON.");}
+  try{const b=await api("/api/admin/upload",{method:"POST",body:fd});setAsset(b.url);setStatus("Upload complete. Copy the URL into your content JSON.");if(view==="assets"){const list=await api("/api/admin/assets");setAssets(list.assets||[]);}}
   catch(e){setStatus(e.message);}
   finally{setBusy(false);e.target.value="";}
  }
