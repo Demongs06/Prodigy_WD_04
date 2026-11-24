@@ -66,7 +66,15 @@ function Admin(){
   catch(e){setStatus(e.message);if(e.message.includes("Authentication")||e.message.includes("Session"))setSignedIn(false);}
   finally{setBusy(false);setChecking(false);}
  }
- async function assignAsset(item,target){\n  setBusy(true);setStatus("");\n  try{\n   if(target==="profile"){const current=await api("/api/admin/content/profile");const data={...(current.data||{}),imageUrl:item.url};await api("/api/admin/content/profile",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});setStatus("Profile photo applied. Refresh the public website to see it.");}\n   else{const index=Number(selectedProject);if(!Number.isInteger(index)||!assetProjects[index])throw Error("Select a project first.");const projects=assetProjects.map((project,i)=>i===index?{...project,imageUrl:item.url}:project);await api("/api/admin/content/projects",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data:projects})});setAssetProjects(projects);setStatus("Project image applied to "+projects[index].title+". Refresh the public website to see it.");}\n  }catch(e){setStatus(e.message);}\n  finally{setBusy(false);}\n }\n async function deleteAsset(item){
+ async function assignAsset(item,target){
+  setBusy(true);setStatus("");
+  try{
+   if(target==="profile"){const current=await api("/api/admin/content/profile");const data={...(current.data||{}),imageUrl:item.url};await api("/api/admin/content/profile",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});setStatus("Profile photo applied. Refresh the public website to see it.");}
+   else{const index=Number(selectedProject);if(!Number.isInteger(index)||!assetProjects[index])throw Error("Select a project first.");const projects=assetProjects.map((project,i)=>i===index?{...project,imageUrl:item.url}:project);await api("/api/admin/content/projects",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data:projects})});setAssetProjects(projects);setStatus("Project image applied to "+projects[index].title+". Refresh the public website to see it.");}
+  }catch(e){setStatus(e.message);}
+  finally{setBusy(false);}
+ }
+ async function deleteAsset(item){
   if(!window.confirm("Delete this uploaded file permanently? Remove its URL from portfolio content first if it is in use."))return;
   setBusy(true);setStatus("");
   try{
