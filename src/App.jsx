@@ -58,7 +58,7 @@ function Admin(){
   catch(e){setStatus(e.message);if(e.message.includes("Authentication")||e.message.includes("Session"))setSignedIn(false);}
   finally{setBusy(false);}
  }
- useEffect(()=>{load("profile");},[]);
+ useEffect(()=>{api("/api/auth/session").then(()=>load("profile")).catch(()=>setChecking(false));},[]);
  async function login(e){
   e.preventDefault();setBusy(true);setStatus("");
   try{await api("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});setSignedIn(true);setPassword("");await load("profile");}
