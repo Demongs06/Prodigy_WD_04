@@ -35,7 +35,7 @@ async function auth(req,res,next){
  try{
   const session=jwt.verify(token,process.env.JWT_SECRET,{issuer:"soham-portfolio"});
   if(session.role!=="admin"||!session.sub)return res.status(403).json({message:"Administrator access required."});
-  const admin=await Admin.findById(session.sub).select("_id email").lean();
+  const admin=await Admin.findById(session.sub).select("_id email sessionVersion").lean();
   if(!admin)return res.status(401).json({message:"Administrator account is no longer active."});
   if(session.sessionVersion!==(admin.sessionVersion||0))return res.status(401).json({message:"Session ended. Please sign in again."});
   req.admin=admin;
