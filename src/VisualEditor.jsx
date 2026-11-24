@@ -55,7 +55,7 @@ export default function VisualEditor({ section, value, onChange }) {
       <span>{label}</span>
       {type === "long" || type === "list"
         ? <textarea rows={type === "list" ? 3 : 4} value={fieldValue} onChange={e => update(e.target.value)} placeholder={type === "list" ? "Add one item per line" : "Write a short description"} />
-        : <input type={type === "email" ? "email" : "text"} value={fieldValue} onChange={e => update(e.target.value)} placeholder={label} />}
+        : <input type={type === "email" || type === "url" ? type : "text"} value={fieldValue} onChange={e => update(e.target.value)} placeholder={label} />}
     </label>;
   });
 
