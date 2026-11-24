@@ -15,7 +15,7 @@ const origins=(process.env.CLIENT_ORIGIN||"http://localhost:5173").split(",").ma
 const cookieOptions={httpOnly:true,secure:production,sameSite:production?"none":"lax",path:"/",maxAge:5*60*1000};
 const sections=["profile","skills","experience","projects","certificates"];
 const Content=mongoose.model("Content",new mongoose.Schema({section:{type:String,unique:true,required:true},data:{type:mongoose.Schema.Types.Mixed,required:true}},{timestamps:true}));
-const Admin=mongoose.model("Admin",new mongoose.Schema({email:{type:String,unique:true,required:true,lowercase:true,trim:true},passwordHash:{type:String,required:true}},{timestamps:true}));
+const Admin=mongoose.model("Admin",new mongoose.Schema({email:{type:String,unique:true,required:true,lowercase:true,trim:true},passwordHash:{type:String,required:true},sessionVersion:{type:Number,default:0}},{timestamps:true}));
 const Message=mongoose.model("Message",new mongoose.Schema({name:{type:String,required:true,maxlength:80},email:{type:String,required:true,maxlength:160},message:{type:String,required:true,maxlength:3000},read:{type:Boolean,default:false}},{timestamps:true}));
 app.disable("x-powered-by");
 app.use(helmet());
@@ -36,6 +36,7 @@ async function auth(req,res,next){
   if(session.role!=="admin"||!session.sub)return res.status(403).json({message:"Administrator access required."});
   const admin=await Admin.findById(session.sub).select("_id email").lean();
   if(!admin)return res.status(401).json({message:"Administrator account is no longer active."});
+  if(session.sessionVersion!==(admin.sessionVersion||0))return res.status(401).json({message:"Session ended. Please sign in again."});
   req.admin=admin;
   next();
  }catch{return res.status(401).json({message:"Session expired. Please sign in again."});}
@@ -53,9 +54,18 @@ app.get("/api/health",(req,res)=>res.json({status:"ok",database:mongoose.connect
 app.get("/api/public/portfolio",async(req,res,next)=>{try{const docs=await Content.find({section:{$in:sections}}).lean();res.set("Cache-Control","public, max-age=60").json(Object.fromEntries(docs.map(x=>[x.section,x.data])));}catch(e){next(e);}});
 app.post("/api/public/contact",async(req,res,next)=>{try{const {name,email,message}=req.body||{};if(typeof name!=="string"||name.trim().length<2||name.length>80||!emailOK(email)||typeof message!=="string"||message.trim().length<10||message.length>3000)return res.status(400).json({message:"Enter a valid name, email and message (10–3000 characters)."});await Message.create({name:name.trim(),email:email.trim().toLowerCase(),message:message.trim()});res.status(201).json({message:"Message received."});}catch(e){next(e);}});
 app.post("/api/auth/setup",async(req,res,next)=>{try{if(!process.env.ADMIN_SETUP_KEY||req.body?.setupKey!==process.env.ADMIN_SETUP_KEY)return res.status(403).json({message:"Invalid setup key."});if(await Admin.countDocuments())return res.status(409).json({message:"Administrator already configured."});const {email,password}=req.body||{};if(!emailOK(email)||typeof password!=="string"||password.length<12||password.length>128)return res.status(400).json({message:"Use a valid email and a password between 12 and 128 characters."});await Admin.create({email:email.trim().toLowerCase(),passwordHash:await bcrypt.hash(password,12)});res.status(201).json({message:"Administrator created."});}catch(e){next(e);}});
-app.post("/api/auth/login",async(req,res,next)=>{try{const {email,password}=req.body||{};if(!emailOK(email)||typeof password!=="string")return res.status(400).json({message:"Email and password are required."});const admin=await Admin.findOne({email:email.trim().toLowerCase()});if(!admin||!await bcrypt.compare(password,admin.passwordHash))return res.status(401).json({message:"Incorrect email or password."});const token=jwt.sign({sub:admin.id,email:admin.email,role:"admin"},process.env.JWT_SECRET,{expiresIn:"5m",issuer:"soham-portfolio"});res.cookie("portfolio_session",token,cookieOptions).json({message:"Signed in.",expiresIn:300});}catch(e){next(e);}});
+app.post("/api/auth/login",async(req,res,next)=>{try{const {email,password}=req.body||{};if(!emailOK(email)||typeof password!=="string")return res.status(400).json({message:"Email and password are required."});const admin=await Admin.findOne({email:email.trim().toLowerCase()});if(!admin||!await bcrypt.compare(password,admin.passwordHash))return res.status(401).json({message:"Incorrect email or password."});const token=jwt.sign({sub:admin.id,email:admin.email,role:"admin",sessionVersion:admin.sessionVersion||0},process.env.JWT_SECRET,{expiresIn:"5m",issuer:"soham-portfolio"});res.cookie("portfolio_session",token,cookieOptions).json({message:"Signed in.",expiresIn:300});}catch(e){next(e);}});
 app.get("/api/auth/session",checkOrigin,auth,(req,res)=>res.set("Cache-Control","no-store").json({authenticated:true,admin:{email:req.admin.email}}));
-app.post("/api/auth/logout",(req,res)=>res.clearCookie("portfolio_session",{httpOnly:true,secure:production,sameSite:production?"none":"lax",path:"/"}).json({message:"Signed out."}));
+app.post("/api/auth/logout",checkOrigin,async(req,res)=>{
+ const token=req.headers.cookie?.split(";").map(x=>x.trim()).find(x=>x.startsWith("portfolio_session="))?.slice("portfolio_session=".length)||"";
+ if(token){
+  try{
+   const session=jwt.verify(token,process.env.JWT_SECRET,{issuer:"soham-portfolio"});
+   if(session.role==="admin"&&session.sub)await Admin.updateOne({_id:session.sub,sessionVersion:session.sessionVersion??0},{$inc:{sessionVersion:1}});
+  }catch{}
+ }
+ res.clearCookie("portfolio_session",{httpOnly:true,secure:production,sameSite:production?"none":"lax",path:"/"}).set("Cache-Control","no-store").json({message:"Signed out."});
+});
 app.get("/api/admin/content/:section",auth,async(req,res,next)=>{try{if(!sections.includes(req.params.section))return res.status(404).json({message:"Unknown section."});const doc=await Content.findOne({section:req.params.section}).lean();res.json({section:req.params.section,data:doc?.data??(req.params.section==="profile"?{}:[])});}catch(e){next(e);}});
 app.put("/api/admin/content/:section",auth,async(req,res,next)=>{try{const section=req.params.section,data=req.body?.data;if(!sections.includes(section))return res.status(404).json({message:"Unknown section."});if(data==null||(section==="profile"?(typeof data!=="object"||Array.isArray(data)):!Array.isArray(data)))return res.status(400).json({message:section==="profile"?"Profile must be a JSON object.":"This section must be a JSON array."});const doc=await Content.findOneAndUpdate({section},{$set:{data}},{upsert:true,new:true,runValidators:true});res.json({message:"Content saved.",data:doc.data});}catch(e){next(e);}});
 app.get("/api/admin/messages",auth,async(req,res,next)=>{try{res.json({messages:await Message.find().sort({createdAt:-1}).limit(100).lean()});}catch(e){next(e);}});
