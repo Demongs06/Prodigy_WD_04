@@ -63,7 +63,7 @@ function Admin(){
  }
  async function loadAssets(){
   setBusy(true);setStatus("");
-  try{const [b,p]=await Promise.all([api("/api/admin/assets"),api("/api/admin/content/projects")]);setAssets(b.assets||[]);setAssetProjects(p.data||[]);setSelectedProject(p.data?.length?"0":"");setView("assets");setSignedIn(true);}
+  try{const [b,p]=await Promise.all([api("/api/admin/assets"),api("/api/admin/content/projects")]);setAssets(b.assets||[]);const projects=p.initialized?p.data:seed.projects;setAssetProjects(projects);setSelectedProject(projects.length?"0":"");setView("assets");setSignedIn(true);}
   catch(e){setStatus(e.message);if(e.message.includes("Authentication")||e.message.includes("Session"))setSignedIn(false);}
   finally{setBusy(false);setChecking(false);}
  }
