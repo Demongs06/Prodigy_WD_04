@@ -38,11 +38,15 @@ function PublicSite(){
  </div>;
 }
 function Admin(){
- const [signedIn,setSignedIn]=useState(false),[checking,setChecking]=useState(true),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[section,setSection]=useState("profile"),[view,setView]=useState("content"),[json,setJson]=useState(""),[messages,setMessages]=useState([]),[status,setStatus]=useState(""),[busy,setBusy]=useState(false),[asset,setAsset]=useState("");
+ const [signedIn,setSignedIn]=useState(false),[checking,setChecking]=useState(true),[expiresAt,setExpiresAt]=useState(null),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[section,setSection]=useState("profile"),[view,setView]=useState("content"),[json,setJson]=useState(""),[messages,setMessages]=useState([]),[status,setStatus]=useState(""),[busy,setBusy]=useState(false),[asset,setAsset]=useState("");
  const sections=["profile","skills","experience","projects","certificates"];
  async function api(path,opts={}){
   const r=await fetch(API+path,{...opts,credentials:"include",headers:{...(opts.headers||{})}});
   const b=await r.json().catch(()=>({message:"Unexpected server response."}));
+  if(r.status===401){
+   setSignedIn(false);setExpiresAt(null);setJson("");setMessages([]);setView("content");
+   throw Error(b.message||"Session expired. Please sign in again.");
+  }
   if(!r.ok)throw Error(b.message||"Request failed");
   return b;
  }
@@ -58,10 +62,36 @@ function Admin(){
   catch(e){setStatus(e.message);if(e.message.includes("Authentication")||e.message.includes("Session"))setSignedIn(false);}
   finally{setBusy(false);}
  }
- useEffect(()=>{api("/api/auth/session").then(()=>load("profile")).catch(()=>setChecking(false));},[]);
+ useEffect(()=>{
+  let active=true;
+  api("/api/auth/session").then(session=>{
+   if(!active)return;
+   setExpiresAt(session.expiresAt);
+   return load("profile");
+  }).catch(()=>{
+   if(active){setSignedIn(false);setExpiresAt(null);setChecking(false);}
+  });
+  return ()=>{active=false;};
+ },[]);
+ useEffect(()=>{
+  if(!signedIn||!expiresAt)return;
+  const expire=()=>{
+   setSignedIn(false);setExpiresAt(null);setJson("");setMessages([]);setView("content");
+   setStatus("Your 5-minute session has expired. Please sign in again.");
+  };
+  const remaining=expiresAt-Date.now();
+  if(remaining<=0){expire();return;}
+  const timer=setTimeout(expire,remaining);
+  const checkOnReturn=()=>{
+   if(Date.now()>=expiresAt)expire();
+   else api("/api/auth/session").catch(()=>{});
+  };
+  window.addEventListener("focus",checkOnReturn);
+  return ()=>{clearTimeout(timer);window.removeEventListener("focus",checkOnReturn);};
+ },[signedIn,expiresAt]);
  async function login(e){
   e.preventDefault();setBusy(true);setStatus("");
-  try{await api("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});setSignedIn(true);setPassword("");await load("profile");}
+  try{const session=await api("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});setExpiresAt(session.expiresAt);setSignedIn(true);setPassword("");await load("profile");}
   catch(e){setStatus(e.message);}
   finally{setBusy(false);setChecking(false);}
  }
@@ -69,7 +99,7 @@ function Admin(){
   setBusy(true);setStatus("");
   try{
    await api("/api/auth/logout",{method:"POST"});
-   setSignedIn(false);setJson("");setMessages([]);setView("content");setStatus("");
+   setSignedIn(false);setExpiresAt(null);setJson("");setMessages([]);setView("content");setStatus("");
   }catch(e){setStatus("Sign out failed: "+e.message);}
   finally{setBusy(false);}
  }
