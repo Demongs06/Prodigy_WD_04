@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-const API=(import.meta.env.VITE_API_URL||"").replace(/\/$/,"");
+const API=(import.meta.env.VITE_API_URL||"https://soham-portfolio-api-5vvv.onrender.com").replace(/\/$/,"");
 const seed={
  profile:{name:"Soham Gaikwad",role:"Fresher · Frontend Developer",location:"India",tagline:"B.Sc. IT graduate seeking an entry-level frontend development opportunity.",bio:"I'm a fresher and B.Sc. Information Technology graduate focused on building responsive web experiences with React and JavaScript. I'm also developing foundational knowledge in application support, SQL, Linux, networking and ITIL concepts.",email:"sohamgaikwad06@gmail.com",github:"https://github.com/Demongs06",linkedin:"https://www.linkedin.com/in/sohamgaikwad",resumeUrl:"/Soham-Gaikwad-resume.pdf",availability:"Open to full-time opportunities"},
  skills:[
