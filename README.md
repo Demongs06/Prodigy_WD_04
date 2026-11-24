@@ -20,7 +20,7 @@ curl -X POST http://localhost:5000/api/auth/setup -H "Content-Type: application/
 The endpoint only works while no administrator exists. Keep the setup key private. Sign in at `/admin`.
 
 ## Admin and uploads
-The admin workspace manages profile, skills, experience, projects, certificates and contact messages. Admin sessions use an HttpOnly cookie; the browser does not store the JWT in localStorage. Contact messages can be marked read or deleted.
+The admin workspace manages profile, skills, experience, projects, certificates and contact messages. Sign-in uses the configured administrator email and password (passwords are bcrypt-hashed). The API issues an 8-hour JWT in an HttpOnly, Secure-in-production cookie; it is never stored in localStorage. Every protected request verifies the token, administrator role and current administrator account. The frontend checks the session before opening the workspace. Contact messages can be marked read or deleted.
 
 Uploads accept JPG, PNG, WEBP and PDF up to 8 MB. The API checks file signatures before sending files to Cloudinary. Cloudinary credentials are optional until uploads are needed.
 
@@ -29,7 +29,7 @@ Uploads accept JPG, PNG, WEBP and PDF up to 8 MB. The API checks file signatures
 - `GET /api/public/portfolio`
 - `POST /api/public/contact`
 - `POST /api/auth/setup` (one time)
-- `POST /api/auth/login` and `POST /api/auth/logout`
+- `POST /api/auth/login` and `POST /api/auth/logout`\n- `GET /api/auth/session` (checks the current administrator session)
 - `GET/PUT /api/admin/content/:section`
 - `GET /api/admin/messages`
 - `PATCH /api/admin/messages/:id/read`
