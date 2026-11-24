@@ -10,6 +10,7 @@ import multer from "multer";
 import {v2 as cloudinary} from "cloudinary";
 
 const app=express(),PORT=process.env.PORT||5000;
+app.set("trust proxy",1); // Render terminates one trusted proxy hop; keep rate-limit client IP detection accurate.
 const production=process.env.NODE_ENV==="production";
 const origins=(process.env.CLIENT_ORIGIN||"http://localhost:5173").split(",").map(x=>x.trim()).filter(Boolean);
 const cookieOptions={httpOnly:true,secure:production,sameSite:production?"none":"lax",path:"/",maxAge:5*60*1000};
