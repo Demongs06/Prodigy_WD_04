@@ -38,16 +38,64 @@ function PublicSite(){
  </div>;
 }
 function Admin(){
- const [token,setToken]=useState(localStorage.getItem("portfolio-token")||""),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[section,setSection]=useState("profile"),[json,setJson]=useState(""),[status,setStatus]=useState(""),[busy,setBusy]=useState(false),[asset,setAsset]=useState("");
+ const [signedIn,setSignedIn]=useState(false),[checking,setChecking]=useState(true),[email,setEmail]=useState(""),[password,setPassword]=useState(""),[section,setSection]=useState("profile"),[view,setView]=useState("content"),[json,setJson]=useState(""),[messages,setMessages]=useState([]),[status,setStatus]=useState(""),[busy,setBusy]=useState(false),[asset,setAsset]=useState("");
  const sections=["profile","skills","experience","projects","certificates"];
- async function api(path,opts={}){const r=await fetch(API+path,{...opts,headers:{...(opts.headers||{}),Authorization:"Bearer "+token}});const b=await r.json();if(!r.ok)throw Error(b.message||"Request failed");return b;}
- async function load(s="profile"){setBusy(true);setStatus("");try{const b=await api("/api/admin/content/"+s);setSection(s);setJson(JSON.stringify(b.data,null,2));}catch(e){setStatus(e.message);if(e.message.includes("Session"))logout();}finally{setBusy(false);}}
- useEffect(()=>{if(token)load("profile");},[token]);
- function logout(){localStorage.removeItem("portfolio-token");setToken("");setJson("");}
- async function login(e){e.preventDefault();setBusy(true);try{const r=await fetch(API+"/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});const b=await r.json();if(!r.ok)throw Error(b.message);localStorage.setItem("portfolio-token",b.token);setToken(b.token);setStatus("");}catch(e){setStatus(e.message);}finally{setBusy(false);}}
- async function save(){setBusy(true);setStatus("");try{const data=JSON.parse(json);await api("/api/admin/content/"+section,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});setStatus("Changes saved.");}catch(e){setStatus(e instanceof SyntaxError?"Invalid JSON. Check commas and quotation marks.":e.message);}finally{setBusy(false);}}
- async function upload(e){const file=e.target.files?.[0];if(!file)return;const fd=new FormData();fd.append("file",file);setBusy(true);try{const b=await api("/api/admin/upload",{method:"POST",body:fd});setAsset(b.url);setStatus("Upload complete. Copy the URL into your content JSON.");}catch(e){setStatus(e.message);}finally{setBusy(false);e.target.value="";}}
- if(!token)return <div className="admin-page"><form className="login" onSubmit={login}><a className="brand" href="/">S soham<span>.</span></a><small>PRIVATE WORKSPACE</small><h1>Admin sign in</h1><p>Use the administrator credentials configured for this portfolio.</p><label>Email<input type="email" autoComplete="username" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)}/></label><button className="btn primary" disabled={busy}>{busy?"Signing in...":"Sign in ↗"}</button>{status&&<p className="status">{status}</p>}<a href="/">← Back to portfolio</a></form></div>;
- return <div className="admin-page"><aside className="sidebar"><a className="brand" href="/">S soham<span>.</span></a><small>CONTENT MANAGER</small>{sections.map(s=><button className={section===s?"selected":""} key={s} onClick={()=>load(s)}>{s[0].toUpperCase()+s.slice(1)}</button>)}<button className="logout" onClick={logout}>Sign out</button></aside><main className="editor"><header><div><small>PORTFOLIO CMS</small><h1>Manage {section}</h1><p>Edit the content displayed on your public website.</p></div><a className="btn" href="/" target="_blank">View website ↗</a></header><div className="toolbar"><label className="upload">Upload file<input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={upload}/></label><button className="btn primary" onClick={save} disabled={busy}>Save changes</button></div>{asset&&<div className="asset"><code>{asset}</code><button onClick={()=>navigator.clipboard.writeText(asset)}>Copy URL</button></div>}<textarea className="json" spellCheck="false" aria-label={section+" JSON editor"} value={json} onChange={e=>setJson(e.target.value)}/>{status&&<p className="status">{status}</p>}<p className="help">Edit valid JSON. Profile is an object; other sections are arrays. Uploads accept JPG, PNG, WEBP and PDF (max 8 MB). Configure Cloudinary on the backend to enable storage.</p></main></div>;
+ async function api(path,opts={}){
+  const r=await fetch(API+path,{...opts,credentials:"include",headers:{...(opts.headers||{})}});
+  const b=await r.json().catch(()=>({message:"Unexpected server response."}));
+  if(!r.ok)throw Error(b.message||"Request failed");
+  return b;
+ }
+ async function load(s="profile"){
+  setBusy(true);setStatus("");
+  try{const b=await api("/api/admin/content/"+s);setSection(s);setView("content");setJson(JSON.stringify(b.data,null,2));setSignedIn(true);}
+  catch(e){setStatus(e.message);if(e.message.includes("Authentication")||e.message.includes("Session"))setSignedIn(false);}
+  finally{setBusy(false);setChecking(false);}
+ }
+ async function loadMessages(){
+  setBusy(true);setStatus("");
+  try{const b=await api("/api/admin/messages");setMessages(b.messages||[]);setView("messages");setSignedIn(true);}
+  catch(e){setStatus(e.message);if(e.message.includes("Authentication")||e.message.includes("Session"))setSignedIn(false);}
+  finally{setBusy(false);}
+ }
+ useEffect(()=>{load("profile");},[]);
+ async function login(e){
+  e.preventDefault();setBusy(true);setStatus("");
+  try{await api("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});setSignedIn(true);setPassword("");await load("profile");}
+  catch(e){setStatus(e.message);}
+  finally{setBusy(false);setChecking(false);}
+ }
+ async function logout(){
+  try{await api("/api/auth/logout",{method:"POST"});}catch{}
+  setSignedIn(false);setJson("");setMessages([]);setView("content");setStatus("");
+ }
+ async function save(){
+  setBusy(true);setStatus("");
+  try{const data=JSON.parse(json);await api("/api/admin/content/"+section,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});setStatus("Changes saved.");}
+  catch(e){setStatus(e instanceof SyntaxError?"Invalid JSON. Check commas and quotation marks.":e.message);}
+  finally{setBusy(false);}
+ }
+ async function upload(e){
+  const file=e.target.files?.[0];if(!file)return;
+  const fd=new FormData();fd.append("file",file);setBusy(true);setStatus("");
+  try{const b=await api("/api/admin/upload",{method:"POST",body:fd});setAsset(b.url);setStatus("Upload complete. Copy the URL into your content JSON.");}
+  catch(e){setStatus(e.message);}
+  finally{setBusy(false);e.target.value="";}
+ }
+ async function toggleRead(message){
+  try{const b=await api("/api/admin/messages/"+message._id+"/read",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({read:!message.read})});setMessages(old=>old.map(x=>x._id===message._id?b.message:x));}
+  catch(e){setStatus(e.message);}
+ }
+ async function deleteMessage(message){
+  if(!window.confirm("Delete this message permanently?"))return;
+  try{await api("/api/admin/messages/"+message._id,{method:"DELETE"});setMessages(old=>old.filter(x=>x._id!==message._id));}
+  catch(e){setStatus(e.message);}
+ }
+ if(checking&&!signedIn)return <div className="admin-page"><p className="status" style={{padding:32}}>Checking admin session…</p></div>;
+ if(!signedIn)return <div className="admin-page"><form className="login" onSubmit={login}><a className="brand" href="/">S soham<span>.</span></a><small>PRIVATE WORKSPACE</small><h1>Admin sign in</h1><p>Use the administrator credentials configured for this portfolio.</p><label>Email<input type="email" autoComplete="username" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)}/></label><button className="btn primary" disabled={busy}>{busy?"Signing in...":"Sign in ↗"}</button>{status&&<p role="status" className="status">{status}</p>}<a href="/">← Back to portfolio</a></form></div>;
+ return <div className="admin-page"><aside className="sidebar"><a className="brand" href="/">S soham<span>.</span></a><small>CONTENT MANAGER</small>{sections.map(s=><button className={view==="content"&&section===s?"selected":""} key={s} onClick={()=>load(s)}>{s[0].toUpperCase()+s.slice(1)}</button>)}<button className={view==="messages"?"selected":""} onClick={loadMessages}>Messages</button><button className="logout" onClick={logout}>Sign out</button></aside><main className="editor"><header><div><small>PORTFOLIO CMS</small><h1>{view==="messages"?"Contact messages":"Manage "+section}</h1><p>{view==="messages"?"Messages sent through the public contact form.":"Edit the content displayed on your public website."}</p></div><a className="btn" href="/" target="_blank" rel="noreferrer">View website ↗</a></header>
+ {view==="content"?<><div className="toolbar"><label className="upload">Upload file<input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={upload}/></label><button className="btn primary" onClick={save} disabled={busy}>Save changes</button></div>{asset&&<div className="asset"><code>{asset}</code><button onClick={()=>navigator.clipboard.writeText(asset)}>Copy URL</button></div>}<textarea className="json" spellCheck="false" aria-label={section+" JSON editor"} value={json} onChange={e=>setJson(e.target.value)}/><p className="help">Profile is a JSON object; other sections are arrays. Uploads accept JPG, PNG, WEBP and PDF (max 8 MB).</p></>:<div className="messages">{messages.length?messages.map(m=><article className={"message-row"+(m.read?" read":"")} key={m._id}><div className="message-head"><div><b>{m.name}</b><a href={"mailto:"+m.email}>{m.email}</a></div><time>{new Date(m.createdAt).toLocaleString()}</time></div><p>{m.message}</p><div className="message-actions"><button onClick={()=>toggleRead(m)}>{m.read?"Mark unread":"Mark read"}</button><button onClick={()=>deleteMessage(m)}>Delete</button></div></article>):<p className="help">No contact messages yet.</p>}</div>}
+ {status&&<p role="status" className="status">{status}</p>}
+ </main></div>;
 }
 export default function App(){return location.pathname.startsWith("/admin")?<Admin/>:<PublicSite/>;}
