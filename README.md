@@ -1,16 +1,14 @@
 # Soham Gaikwad — Full-stack Portfolio
 
-React + Vite portfolio with an Express API, MongoDB content store, private admin workspace, JWT authentication and Cloudinary file uploads.
+React + Vite portfolio with an Express API, MongoDB content store, private admin workspace, HttpOnly cookie authentication and optional Cloudinary uploads.
 
 ## Local setup
 Requirements: Node.js 20+ and MongoDB.
 
 1. Run `npm install`.
 2. Copy `.env.example` to `.env`. Set `MONGODB_URI`, a random `JWT_SECRET` (at least 32 characters), and a private `ADMIN_SETUP_KEY`.
-3. Keep `CLIENT_ORIGIN=http://localhost:5173`.
+3. Keep `CLIENT_ORIGIN=http://localhost:5173` and `NODE_ENV=development`.
 4. Run `npm run dev`; open `http://localhost:5173`.
-
-Vite proxies `/api` to Express on port 5000.
 
 ## Create the first administrator
 Run once after starting the API. Use a password of at least 12 characters:
@@ -19,25 +17,35 @@ Run once after starting the API. Use a password of at least 12 characters:
 curl -X POST http://localhost:5000/api/auth/setup -H "Content-Type: application/json" -d '{"setupKey":"YOUR_ADMIN_SETUP_KEY","email":"you@example.com","password":"YOUR_LONG_PASSWORD"}'
 ```
 
-The endpoint only works while no administrator exists. Keep the setup key secret and remove/rotate it after initial setup. Sign in at `/admin`.
+The endpoint only works while no administrator exists. Keep the setup key private. Sign in at `/admin`.
 
-## Content & uploads
-The admin JSON editor manages profile, skills, experience, projects and certificates. Profile is a JSON object; other sections are arrays. The public website loads content from MongoDB. File upload accepts JPG, PNG, WEBP and PDF up to 8 MB; configure all Cloudinary credentials to enable it.
+## Admin and uploads
+The admin workspace manages profile, skills, experience, projects, certificates and contact messages. Admin sessions use an HttpOnly cookie; the browser does not store the JWT in localStorage. Contact messages can be marked read or deleted.
+
+Uploads accept JPG, PNG, WEBP and PDF up to 8 MB. The API checks file signatures before sending files to Cloudinary. Cloudinary credentials are optional until uploads are needed.
 
 ## API
 - `GET /api/health`
 - `GET /api/public/portfolio`
 - `POST /api/public/contact`
 - `POST /api/auth/setup` (one time)
-- `POST /api/auth/login`
+- `POST /api/auth/login` and `POST /api/auth/logout`
 - `GET/PUT /api/admin/content/:section`
 - `GET /api/admin/messages`
 - `PATCH /api/admin/messages/:id/read`
+- `DELETE /api/admin/messages/:id`
 - `POST /api/admin/upload`
 
-## Deployment
-**Render backend:** deploy this repository as a web service with `npm install` and `npm start`. Configure MongoDB Atlas, JWT secret, setup key, Cloudinary credentials and `CLIENT_ORIGIN` as the exact Netlify site origin.
+Admin routes require the session cookie and an allowed request Origin. Production cookies require HTTPS and are configured for cross-origin frontend/API requests.
 
-**Netlify frontend:** build command `npm run build`, publish directory `dist`. Set `VITE_API_URL` to the deployed Render API URL and redeploy. The API CORS allowlist must include your Netlify domain (comma-separated for custom domains).
+## Render deployment
+The committed `render.yaml` creates a separate Singapore-region web service and generates `JWT_SECRET` and `ADMIN_SETUP_KEY`. During the first Blueprint sync, provide:
+- `MONGODB_URI`: the MongoDB Atlas connection string for the portfolio database.
+- `CLIENT_ORIGIN`: the exact public frontend origin, without a trailing slash (for example, `https://your-site.netlify.app`).
 
-Never commit real environment secrets. Admin passwords are bcrypt-hashed, protected routes require JWT, and auth/contact endpoints are rate-limited.
+After the first deploy, copy the generated `ADMIN_SETUP_KEY` from Render's service environment and use it once to create the admin account. Do not paste database credentials or setup secrets into source code or GitHub.
+
+## Netlify frontend
+Build command: `npm run build`; publish directory: `dist`. Set `VITE_API_URL` to the deployed Render API URL, then redeploy the frontend. Add the exact Netlify/custom-domain origin to Render's `CLIENT_ORIGIN`.
+
+For reliable cookie authentication across browsers, use a custom domain arrangement that keeps the frontend and API on the same site if third-party cookies are blocked by the browser.
