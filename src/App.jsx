@@ -49,7 +49,7 @@ function Admin(){
  async function load(s="profile"){
   setBusy(true);setStatus("");
   try{const b=await api("/api/admin/content/"+s);setSection(s);setView("content");setJson(JSON.stringify(b.data,null,2));setSignedIn(true);}
-  catch(e){setStatus(e.message);if(e.message.includes("Authentication")||e.message.includes("Session"))setSignedIn(false);}
+  catch(e){if(e.message.includes("Authentication")||e.message.includes("Session")){setSignedIn(false);setStatus("");}else setStatus(e.message);}
   finally{setBusy(false);setChecking(false);}
  }
  async function loadMessages(){
