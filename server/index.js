@@ -43,6 +43,10 @@ async function auth(req,res,next){
  }catch{return res.status(401).json({message:"Session expired. Please sign in again."});}
 }
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024},fileFilter(req,file,cb){const ok=["image/jpeg","image/png","image/webp","application/pdf"].includes(file.mimetype);cb(ok?null:new Error("Only JPG, PNG, WEBP and PDF files are allowed."),ok);}});
+function configureCloudinary(){
+ if(!process.env.CLOUDINARY_CLOUD_NAME||!process.env.CLOUDINARY_API_KEY||!process.env.CLOUDINARY_API_SECRET)throw Error("Configure Cloudinary credentials on the backend first.");
+ cloudinary.config({cloud_name:process.env.CLOUDINARY_CLOUD_NAME,api_key:process.env.CLOUDINARY_API_KEY,api_secret:process.env.CLOUDINARY_API_SECRET,secure:true});
+}
 function validFile(file){
  const b=file.buffer,m=file.mimetype;
  if(m==="image/jpeg")return b.length>=3&&b[0]===0xff&&b[1]===0xd8&&b[2]===0xff;
@@ -72,7 +76,26 @@ app.put("/api/admin/content/:section",auth,async(req,res,next)=>{try{const secti
 app.get("/api/admin/messages",auth,async(req,res,next)=>{try{res.json({messages:await Message.find().sort({createdAt:-1}).limit(100).lean()});}catch(e){next(e);}});
 app.patch("/api/admin/messages/:id/read",auth,async(req,res,next)=>{try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid message ID."});if(typeof req.body?.read!=="boolean")return res.status(400).json({message:"Read must be true or false."});const message=await Message.findByIdAndUpdate(req.params.id,{read:req.body.read},{new:true});if(!message)return res.status(404).json({message:"Message not found."});res.json({message});}catch(e){next(e);}});
 app.delete("/api/admin/messages/:id",auth,async(req,res,next)=>{try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid message ID."});const message=await Message.findByIdAndDelete(req.params.id);if(!message)return res.status(404).json({message:"Message not found."});res.json({message:"Message deleted."});}catch(e){next(e);}});
-app.post("/api/admin/upload",auth,upload.single("file"),async(req,res,next)=>{try{if(!req.file)return res.status(400).json({message:"Choose a file."});if(!validFile(req.file))return res.status(400).json({message:"File content does not match its file type."});if(!process.env.CLOUDINARY_CLOUD_NAME||!process.env.CLOUDINARY_API_KEY||!process.env.CLOUDINARY_API_SECRET)return res.status(503).json({message:"Configure Cloudinary credentials on the backend first."});cloudinary.config({cloud_name:process.env.CLOUDINARY_CLOUD_NAME,api_key:process.env.CLOUDINARY_API_KEY,api_secret:process.env.CLOUDINARY_API_SECRET,secure:true});const pdf=req.file.mimetype==="application/pdf";const result=await new Promise((resolve,reject)=>{const stream=cloudinary.uploader.upload_stream({folder:"soham-portfolio",resource_type:pdf?"raw":"image",use_filename:true,unique_filename:true},(err,out)=>err?reject(err):resolve(out));stream.end(req.file.buffer);});res.status(201).json({url:result.secure_url,publicId:result.public_id,bytes:result.bytes});}catch(e){next(e);}});
+app.post("/api/admin/upload",auth,upload.single("file"),async(req,res,next)=>{try{if(!req.file)return res.status(400).json({message:"Choose a file."});if(!validFile(req.file))return res.status(400).json({message:"File content does not match its file type."});try{configureCloudinary();}catch(e){return res.status(503).json({message:e.message});}const pdf=req.file.mimetype==="application/pdf";const result=await new Promise((resolve,reject)=>{const stream=cloudinary.uploader.upload_stream({folder:"soham-portfolio",resource_type:pdf?"raw":"image",use_filename:true,unique_filename:true},(err,out)=>err?reject(err):resolve(out));stream.end(req.file.buffer);});res.status(201).json({url:result.secure_url,publicId:result.public_id,bytes:result.bytes,resourceType:pdf?"raw":"image",format:result.format});}catch(e){next(e);}});
+app.get("/api/admin/assets",auth,async(req,res,next)=>{try{
+ configureCloudinary();
+ const [images,files]=await Promise.all([
+  cloudinary.api.resources({resource_type:"image",type:"upload",prefix:"soham-portfolio/",max_results:100}),
+  cloudinary.api.resources({resource_type:"raw",type:"upload",prefix:"soham-portfolio/",max_results:100})
+ ]);
+ const assets=[...(images.resources||[]).map(x=>({...x,resourceType:"image"})),...(files.resources||[]).map(x=>({...x,resourceType:"raw"}))].map(x=>({publicId:x.public_id,url:x.secure_url,resourceType:x.resourceType,format:x.format,bytes:x.bytes,createdAt:x.created_at})).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+ res.set("Cache-Control","no-store").json({assets});
+}catch(e){next(e);}});
+app.delete("/api/admin/assets",auth,async(req,res,next)=>{try{
+ const {publicId,resourceType}=req.body||{};
+ if(typeof publicId!=="string"||!publicId.startsWith("soham-portfolio/")||!["image","raw"].includes(resourceType))return res.status(400).json({message:"Invalid asset selection."});
+ const docs=await Content.find({section:{$in:sections}}).lean();
+ if(docs.some(doc=>JSON.stringify(doc.data).includes(publicId)))return res.status(409).json({message:"This file is referenced by portfolio content. Replace or remove that URL before deleting it."});
+ configureCloudinary();
+ const result=await cloudinary.uploader.destroy(publicId,{resource_type:resourceType,invalidate:true});
+ if(result.result!=="ok"&&result.result!=="not found")return res.status(502).json({message:"Cloudinary could not delete this file."});
+ res.json({message:"File deleted."});
+}catch(e){next(e);}});
 app.use((err,req,res,next)=>{if(err instanceof multer.MulterError)return res.status(400).json({message:err.code==="LIMIT_FILE_SIZE"?"File exceeds 8 MB.":"Upload failed."});if(err.message==="Origin not allowed")return res.status(403).json({message:err.message});console.error(err);res.status(500).json({message:"Something went wrong. Please try again."});});
 if(!process.env.MONGODB_URI)throw Error("MONGODB_URI is required.");
 if(!process.env.JWT_SECRET||process.env.JWT_SECRET.length<32)throw Error("JWT_SECRET must be at least 32 characters.");
