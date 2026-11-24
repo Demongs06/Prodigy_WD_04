@@ -67,6 +67,18 @@ app.get("/api/public/portfolio",async(req,res,next)=>{try{
  }
  res.set("Cache-Control","public, max-age=60").json(portfolio);
 }catch(e){next(e);}});
+app.get("/api/public/resume",rateLimit({windowMs:60000,limit:10,standardHeaders:true,legacyHeaders:false}),async(req,res,next)=>{try{
+ const profile=await Content.findOne({section:"profile"}).lean();
+ const source=profile?.data?.resumeUrl;
+ if(typeof source!=="string"||!source.trim())return res.status(404).json({message:"Resume not available."});
+ const url=new URL(source);
+ if(url.protocol!=="https:"||url.hostname!=="res.cloudinary.com"||!url.pathname.includes("/raw/upload/"))return res.status(404).json({message:"A valid PDF resume is not configured."});
+ const response=await fetch(url,{signal:AbortSignal.timeout(15000),redirect:"error"});
+ if(!response.ok)return res.status(502).json({message:"Unable to retrieve the resume."});
+ const file=Buffer.from(await response.arrayBuffer());
+ if(file.length>8*1024*1024||file.length<5||file.toString("ascii",0,5)!=="%PDF-")return res.status(502).json({message:"The configured resume is not a valid PDF."});
+ res.set({"Content-Type":"application/pdf","Content-Disposition":'attachment; filename="Soham-Gaikwad-Resume.pdf"',"Content-Length":String(file.length),"Cache-Control":"no-store"}).send(file);
+}catch(e){if(e.name==="TimeoutError")return res.status(504).json({message:"Resume download timed out."});next(e);}});
 app.post("/api/public/contact",async(req,res,next)=>{try{const {name,email,message}=req.body||{};if(typeof name!=="string"||name.trim().length<2||name.length>80||!emailOK(email)||typeof message!=="string"||message.trim().length<10||message.length>3000)return res.status(400).json({message:"Enter a valid name, email and message (10–3000 characters)."});await Message.create({name:name.trim(),email:email.trim().toLowerCase(),message:message.trim()});res.status(201).json({message:"Message received."});}catch(e){next(e);}});
 app.post("/api/auth/setup",async(req,res,next)=>{try{if(!process.env.ADMIN_SETUP_KEY||req.body?.setupKey!==process.env.ADMIN_SETUP_KEY)return res.status(403).json({message:"Invalid setup key."});if(await Admin.countDocuments())return res.status(409).json({message:"Administrator already configured."});const {email,password}=req.body||{};if(!emailOK(email)||typeof password!=="string"||password.length<12||password.length>128)return res.status(400).json({message:"Use a valid email and a password between 12 and 128 characters."});await Admin.create({email:email.trim().toLowerCase(),passwordHash:await bcrypt.hash(password,12)});res.status(201).json({message:"Administrator created."});}catch(e){next(e);}});
 app.post("/api/auth/login",async(req,res,next)=>{try{const {email,password}=req.body||{};if(!emailOK(email)||typeof password!=="string")return res.status(400).json({message:"Email and password are required."});const admin=await Admin.findOne({email:email.trim().toLowerCase()});if(!admin||!await bcrypt.compare(password,admin.passwordHash))return res.status(401).json({message:"Incorrect email or password."});const token=jwt.sign({sub:admin.id,email:admin.email,role:"admin",sessionVersion:admin.sessionVersion||0},process.env.JWT_SECRET,{expiresIn:"5m",issuer:"soham-portfolio"});res.cookie("portfolio_session",token,cookieOptions).set("Cache-Control","no-store").json({message:"Signed in.",expiresAt:jwt.decode(token).exp*1000,expiresIn:300});}catch(e){next(e);}});
