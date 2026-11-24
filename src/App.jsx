@@ -66,8 +66,12 @@ function Admin(){
   finally{setBusy(false);setChecking(false);}
  }
  async function logout(){
-  try{await api("/api/auth/logout",{method:"POST"});}catch{}
-  setSignedIn(false);setJson("");setMessages([]);setView("content");setStatus("");
+  setBusy(true);setStatus("");
+  try{
+   await api("/api/auth/logout",{method:"POST"});
+   setSignedIn(false);setJson("");setMessages([]);setView("content");setStatus("");
+  }catch(e){setStatus("Sign out failed: "+e.message);}
+  finally{setBusy(false);}
  }
  async function save(){
   setBusy(true);setStatus("");
@@ -93,7 +97,7 @@ function Admin(){
  }
  if(checking&&!signedIn)return <div className="admin-page"><p className="status" style={{padding:32}}>Checking admin session…</p></div>;
  if(!signedIn)return <div className="admin-page"><form className="login" onSubmit={login}><a className="brand" href="/">S soham<span>.</span></a><small>PRIVATE WORKSPACE</small><h1>Admin sign in</h1><p>Use the administrator credentials configured for this portfolio.</p><label>Email<input type="email" autoComplete="username" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)}/></label><button className="btn primary" disabled={busy}>{busy?"Signing in...":"Sign in ↗"}</button>{status&&<p role="status" className="status">{status}</p>}<a href="/">← Back to portfolio</a></form></div>;
- return <div className="admin-page"><aside className="sidebar"><a className="brand" href="/">S soham<span>.</span></a><small>CONTENT MANAGER</small>{sections.map(s=><button className={view==="content"&&section===s?"selected":""} key={s} onClick={()=>load(s)}>{s[0].toUpperCase()+s.slice(1)}</button>)}<button className={view==="messages"?"selected":""} onClick={loadMessages}>Messages</button><button className="logout" onClick={logout}>Sign out</button></aside><main className="editor"><header><div><small>PORTFOLIO CMS</small><h1>{view==="messages"?"Contact messages":"Manage "+section}</h1><p>{view==="messages"?"Messages sent through the public contact form.":"Edit the content displayed on your public website."}</p></div><a className="btn" href="/" target="_blank" rel="noreferrer">View website ↗</a></header>
+ return <div className="admin-page"><aside className="sidebar"><a className="brand" href="/">S soham<span>.</span></a><small>CONTENT MANAGER</small>{sections.map(s=><button className={view==="content"&&section===s?"selected":""} key={s} onClick={()=>load(s)}>{s[0].toUpperCase()+s.slice(1)}</button>)}<button className={view==="messages"?"selected":""} onClick={loadMessages}>Messages</button><button className="logout" onClick={logout} disabled={busy}>{busy?"Signing out...":"Sign out"}</button></aside><main className="editor"><header><div><small>PORTFOLIO CMS</small><h1>{view==="messages"?"Contact messages":"Manage "+section}</h1><p>{view==="messages"?"Messages sent through the public contact form.":"Edit the content displayed on your public website."}</p></div><a className="btn" href="/" target="_blank" rel="noreferrer">View website ↗</a></header>
  {view==="content"?<><div className="toolbar"><label className="upload">Upload file<input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={upload}/></label><button className="btn primary" onClick={save} disabled={busy}>Save changes</button></div>{asset&&<div className="asset"><code>{asset}</code><button onClick={()=>navigator.clipboard.writeText(asset)}>Copy URL</button></div>}<textarea className="json" spellCheck="false" aria-label={section+" JSON editor"} value={json} onChange={e=>setJson(e.target.value)}/><p className="help">Profile is a JSON object; other sections are arrays. Uploads accept JPG, PNG, WEBP and PDF (max 8 MB).</p></>:<div className="messages">{messages.length?messages.map(m=><article className={"message-row"+(m.read?" read":"")} key={m._id}><div className="message-head"><div><b>{m.name}</b><a href={"mailto:"+m.email}>{m.email}</a></div><time>{new Date(m.createdAt).toLocaleString()}</time></div><p>{m.message}</p><div className="message-actions"><button onClick={()=>toggleRead(m)}>{m.read?"Mark unread":"Mark read"}</button><button onClick={()=>deleteMessage(m)}>Delete</button></div></article>):<p className="help">No contact messages yet.</p>}</div>}
  {status&&<p role="status" className="status">{status}</p>}
  </main></div>;
