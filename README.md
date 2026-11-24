@@ -17,10 +17,28 @@ Run once after starting the API. Use a password of at least 12 characters:
 curl -X POST http://localhost:5000/api/auth/setup -H "Content-Type: application/json" -d '{"setupKey":"YOUR_ADMIN_SETUP_KEY","email":"you@example.com","password":"YOUR_LONG_PASSWORD"}'
 ```
 
-The endpoint only works while no administrator exists. Keep the setup key private. Sign in at `/admin`.
+The endpoint only works while no administrator exists. Keep the setup key private. Sign in at `/admin` using the email and password you supplied here.
+
+### Set production admin credentials
+
+1. Open the Render dashboard and select the `soham-portfolio-api` service.
+2. Open **Environment** and confirm `ADMIN_SETUP_KEY` exists. Copy it privately; never add it to GitHub or share it in chat.
+3. In Windows PowerShell, run the following. Enter the setup key, desired admin email and a new password of at least 12 characters when prompted:
+
+```powershell
+$setupKey = Read-Host "ADMIN_SETUP_KEY"
+$email = Read-Host "Admin email"
+$securePassword = Read-Host "Admin password (12+ characters)" -AsSecureString
+$password = [System.Net.NetworkCredential]::new("", $securePassword).Password
+$body = @{ setupKey = $setupKey; email = $email; password = $password } | ConvertTo-Json
+Invoke-RestMethod -Uri "https://soham-portfolio-api-5vvv.onrender.com/api/auth/setup" -Method Post -ContentType "application/json" -Body $body
+Remove-Variable password, setupKey, body, securePassword
+```
+
+A successful response means the administrator account was created. Then open `https://portfolio-soham.netlify.app/admin` and sign in with that email and password. Save the password in a password manager. The setup endpoint is one-time only; if it reports that an administrator already exists, use the existing credentials rather than running setup again.
 
 ## Admin and uploads
-The admin workspace manages profile, skills, experience, projects, certificates and contact messages. Sign-in uses the configured administrator email and password (passwords are bcrypt-hashed). The API issues an 8-hour JWT in an HttpOnly, Secure-in-production cookie; it is never stored in localStorage. Every protected request verifies the token, administrator role and current administrator account. The frontend checks the session before opening the workspace. Contact messages can be marked read or deleted.
+The admin workspace manages profile, skills, experience, projects, certificates and contact messages. Sign-in uses the configured administrator email and password (passwords are bcrypt-hashed). The API issues a 5-minute JWT in an HttpOnly, Secure-in-production cookie; it is never stored in localStorage. Every protected request verifies the token, administrator role, current administrator account and session version. Signing out clears the cookie and increments the administrator's session version, immediately invalidating the active token (and any other current admin sessions). The frontend checks the session before opening the workspace. Contact messages can be marked read or deleted.
 
 Uploads accept JPG, PNG, WEBP and PDF up to 8 MB. The API checks file signatures before sending files to Cloudinary. Cloudinary credentials are optional until uploads are needed.
 
