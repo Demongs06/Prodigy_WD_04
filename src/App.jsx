@@ -18,7 +18,7 @@ const seed={
 };
 function Title({n,title,note}){return <div className="heading"><span className="eyebrow">{n}</span><h2>{title}</h2>{note&&<p>{note}</p>}</div>}
 function Icon({children}){return <span className="icon">{children}</span>}
-function externalUrl(value){const raw=String(value||"").trim();if(!raw)return "";try{const url=new URL(/^[a-z][a-z\\d+.-]*:/i.test(raw)?raw:"https://"+raw);return url.protocol==="https:"||url.protocol==="http:"?url.href:"";}catch{return "";}}
+function externalUrl(value){const raw=String(value||"").trim();if(!raw)return "";try{const url=new URL(/^[a-z][a-z\d+.-]*:/i.test(raw)?raw:"https://"+raw);return url.protocol==="https:"||url.protocol==="http:"?url.href:"";}catch{return "";}}
 function PublicSite(){
  const [data,setData]=useState(seed),[menu,setMenu]=useState(false),[form,setForm]=useState({name:"",email:"",message:""}),[status,setStatus]=useState(""),[sending,setSending]=useState(false);
  useEffect(()=>{fetch(API+"/api/public/portfolio",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then(remote=>setData(old=>({...old,...remote,profile:{...old.profile,...remote.profile}}))).catch(()=>{});},[]);
