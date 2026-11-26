@@ -54,7 +54,7 @@ Uploads accept JPG, PNG, WEBP and PDF up to 8 MB. The API checks file signatures
 - `DELETE /api/admin/messages/:id`
 - `POST /api/admin/upload`
 
-Admin routes require the session cookie and an allowed request Origin. Production cookies require HTTPS and are configured for cross-origin frontend/API requests.
+Admin routes require the session cookie and an allowed request Origin. Production cookies use Secure and SameSite=Lax. Netlify proxies `/api/*` to Render so browser requests and HttpOnly session cookies stay on the portfolio origin, avoiding third-party-cookie restrictions.
 
 ## Render deployment
 The committed `render.yaml` creates a separate Singapore-region web service and generates `JWT_SECRET` and `ADMIN_SETUP_KEY`. During the first Blueprint sync, provide:
@@ -64,6 +64,4 @@ The committed `render.yaml` creates a separate Singapore-region web service and 
 After the first deploy, copy the generated `ADMIN_SETUP_KEY` from Render's service environment and use it once to create the admin account. Do not paste database credentials or setup secrets into source code or GitHub.
 
 ## Netlify frontend
-Build command: `npm run build`; publish directory: `dist`. Set `VITE_API_URL` to the deployed Render API URL, then redeploy the frontend. Add the exact Netlify/custom-domain origin to Render's `CLIENT_ORIGIN`.
-
-For reliable cookie authentication across browsers, use a custom domain arrangement that keeps the frontend and API on the same site if third-party cookies are blocked by the browser.
+Build command: `npm run build`; publish directory: `dist`. The committed `netlify.toml` proxies `/api/*` to `https://soham-portfolio-api-5vvv.onrender.com`, so no production `VITE_API_URL` is required. Set Render's `CLIENT_ORIGIN` to the exact Netlify/custom-domain origin (for this site: `https://portfolio-soham.netlify.app`). Keep the API proxy rule above the SPA fallback rule.
