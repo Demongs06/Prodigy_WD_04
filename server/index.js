@@ -24,7 +24,7 @@ app.use(cors({origin(origin,cb){if(!origin||origins.includes(origin))return cb(n
 app.use(express.json({limit:"1mb"}));
 app.use("/api/auth",rateLimit({windowMs:900000,limit:10,standardHeaders:true,legacyHeaders:false}));
 app.use("/api/public/contact",rateLimit({windowMs:3600000,limit:5,standardHeaders:true,legacyHeaders:false}));
-function checkOrigin(req,res,next){if(!origins.includes(req.get("origin")))return res.status(403).json({message:"Request origin not allowed."});next();}
+function checkOrigin(req,res,next){const origin=req.get("origin");if(!origins.includes(origin)){console.warn("Blocked admin request origin:",origin||"(missing)");return res.status(403).json({message:"Request origin not allowed."});}next();}
 app.use("/api/admin",checkOrigin);
 app.use("/api/auth/login",checkOrigin);
 app.use("/api/auth/logout",checkOrigin);
