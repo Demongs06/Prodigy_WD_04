@@ -22,6 +22,8 @@ const emptyItems = {
 };
 
 function parse(value) {
+  if (value && typeof value === "object") return value;
+  if (typeof value !== "string" || !value.trim()) return null;
   try { return JSON.parse(value); } catch { return null; }
 }
 
