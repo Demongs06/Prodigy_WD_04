@@ -13,7 +13,7 @@ const app=express(),PORT=process.env.PORT||5000;
 app.set("trust proxy",1); // Render terminates one trusted proxy hop; keep rate-limit client IP detection accurate.
 const production=process.env.NODE_ENV==="production";
 const origins=(process.env.CLIENT_ORIGIN||"http://localhost:5173").split(",").map(x=>x.trim()).filter(Boolean);
-const cookieOptions={httpOnly:true,secure:production,sameSite:production?"none":"lax",path:"/",maxAge:5*60*1000};
+const cookieOptions={httpOnly:true,secure:production,sameSite:"lax",path:"/",maxAge:5*60*1000};
 const sections=["profile","skills","experience","projects","certificates"];
 const Content=mongoose.model("Content",new mongoose.Schema({section:{type:String,unique:true,required:true},data:{type:mongoose.Schema.Types.Mixed,required:true}},{timestamps:true}));
 const Admin=mongoose.model("Admin",new mongoose.Schema({email:{type:String,unique:true,required:true,lowercase:true,trim:true},passwordHash:{type:String,required:true},sessionVersion:{type:Number,default:0}},{timestamps:true}));
@@ -43,7 +43,7 @@ async function auth(req,res,next){
   next();
  }catch{return res.status(401).json({message:"Session expired. Please sign in again."});}
 }
-const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024},fileFilter(req,file,cb){const ok=["image/jpeg","image/png","image/webp","application/pdf"].includes(file.mimetype);cb(ok?null:new Error("Only JPG, PNG, WEBP and PDF files are allowed."),ok);}});
+const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024,files:1,fields:0,parts:1},fileFilter(req,file,cb){const ok=["image/jpeg","image/png","image/webp","application/pdf"].includes(file.mimetype);cb(ok?null:new Error("Only JPG, PNG, WEBP and PDF files are allowed."),ok);}});
 function configureCloudinary(){
  if(!process.env.CLOUDINARY_CLOUD_NAME||!process.env.CLOUDINARY_API_KEY||!process.env.CLOUDINARY_API_SECRET)throw Error("Configure Cloudinary credentials on the backend first.");
  cloudinary.config({cloud_name:process.env.CLOUDINARY_CLOUD_NAME,api_key:process.env.CLOUDINARY_API_KEY,api_secret:process.env.CLOUDINARY_API_SECRET,secure:true});
