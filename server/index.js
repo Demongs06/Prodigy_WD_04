@@ -91,7 +91,7 @@ app.post("/api/auth/logout",checkOrigin,async(req,res)=>{
    if(session.role==="admin"&&session.sub)await Admin.updateOne({_id:session.sub,sessionVersion:session.sessionVersion??0},{$inc:{sessionVersion:1}});
   }catch{}
  }
- res.clearCookie("portfolio_session",{httpOnly:true,secure:production,sameSite:production?"none":"lax",path:"/"}).set("Cache-Control","no-store").json({message:"Signed out."});
+ res.clearCookie("portfolio_session",{httpOnly:true,secure:production,sameSite:"lax",path:"/"}).set("Cache-Control","no-store").json({message:"Signed out."});
 });
 app.get("/api/admin/content/:section",auth,async(req,res,next)=>{try{if(!sections.includes(req.params.section))return res.status(404).json({message:"Unknown section."});const doc=await Content.findOne({section:req.params.section}).lean();res.json({section:req.params.section,initialized:Boolean(doc),data:doc?.data??(req.params.section==="profile"?{}:[])});}catch(e){next(e);}});
 app.put("/api/admin/content/:section",auth,async(req,res,next)=>{try{const section=req.params.section,data=req.body?.data;if(!sections.includes(section))return res.status(404).json({message:"Unknown section."});if(data==null||(section==="profile"?(typeof data!=="object"||Array.isArray(data)):!Array.isArray(data)))return res.status(400).json({message:section==="profile"?"Profile must be a JSON object.":"This section must be a JSON array."});const doc=await Content.findOneAndUpdate({section},{$set:{data}},{upsert:true,new:true,runValidators:true});res.json({message:"Content saved.",data:doc.data});}catch(e){next(e);}});
